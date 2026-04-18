@@ -50,7 +50,7 @@ url_parts parse_url(std::string url)
 
 int main()
 {
-    url_parts parts = parse_url("http://www.thatjessebloke.co.uk");
+    url_parts parts = parse_url("https://www.thatjessebloke.co.uk");
 
     addrinfo hints = {0};
     addrinfo *result = {0};
@@ -69,8 +69,8 @@ int main()
     }
 
     // Create a socket
-    int sockfd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-    if(sockfd == -1)
+    int sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+    if(sock == -1)
     {
         perror("Socket creation failed");
         freeaddrinfo(result);
@@ -78,13 +78,35 @@ int main()
     }
 
     // Connect to the server
-    if(connect(sockfd, result->ai_addr, result->ai_addrlen) == -1)
+    if(connect(sock, result->ai_addr, result->ai_addrlen) == -1)
     {
         perror("Connection failed");
-        close(sockfd);
+        close(sock);
         freeaddrinfo(result);
         return 1;
     }
 
     std::cout << "Successfully connected to " << parts.host << " on port " << parts.port << std::endl;
+
+    char buffer[4096] = {0};
+    std::string command = "GET " + parts.path + " HTTP/1.0\r\nHost: " + parts.host + "\r\n\r\n";
+
+    std::cout << command.c_str();
+
+    int send_result = send(sock, command.c_str(), sizeof(command.c_str()), 0);
+    if(send_result != -1)
+    {
+        int bytes_recieved = recv(sock, buffer, 4096, 0);
+
+        // echo response to the console
+        if(bytes_recieved > 0)
+        {
+            std::cout << std::string(buffer, 0, bytes_recieved) << std::endl;
+        }
+    }
+
+    close(sock);
+    freeaddrinfo(result);
+
+    return 0;
 }
