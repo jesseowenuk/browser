@@ -14,6 +14,7 @@ struct uri
     std::string port;
     std::string path;
     std::map<std::string, std::string> headers = {};
+    std::string body_content;
 };
 
 uri parse_url(std::string url)
@@ -172,6 +173,14 @@ int main()
         {
             std::cout << element.first << " -> " << element.second << std::endl;
         }
+
+        assert(!current_uri.headers.count("transfer-encoding"));
+        assert(!current_uri.headers.count("content-encoding"));
+
+        current_uri.body_content = full_response.erase(0, deliminator + 1);
+
+        std::cout << "CONTENT:\n" << current_uri.body_content << std::endl;
+        
     }
 
     close(sock);
