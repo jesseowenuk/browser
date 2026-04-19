@@ -54,10 +54,8 @@ uri parse_url(std::string url)
     return current_uri;
 }
 
-int main()
+int request(uri* current_uri)
 {
-    uri current_uri = parse_url("http://nossl.thatjessebloke.co.uk");
-
     addrinfo hints = {0};
     addrinfo *result = {0};
 
@@ -66,12 +64,12 @@ int main()
 
     // use .c_str() to convert std::string to a style string which getaddrinfo needs
     // this then uses getaddrinfo to do a DNS lookup
-    int status = getaddrinfo(current_uri.host.c_str(), current_uri.port.c_str(), &hints, &result);
+    int status = getaddrinfo(current_uri->host.c_str(), current_uri->port.c_str(), &hints, &result);
 
     if(status != 0)
     {
         std::cerr << "DNS Lookup failed: " << gai_strerror(status) << std::endl;
-        return 1;
+        return -1;
     }
 
     // Create a socket
@@ -80,7 +78,7 @@ int main()
     {
         perror("Socket creation failed");
         freeaddrinfo(result);
-        return 1;
+        return -1;
     }
 
     // Connect to the server
@@ -89,17 +87,15 @@ int main()
         perror("Connection failed");
         close(sock);
         freeaddrinfo(result);
-        return 1;
+        return -1;
     }
 
-    std::cout << "Successfully connected to " << current_uri.host << " on port " << current_uri.port << std::endl;
+    std::cout << "Successfully connected to " << current_uri->host << " on port " << current_uri->port << std::endl;
 
     char buffer[4096] = {0};
     std::string full_response;
 
-    std::string command = "GET " + current_uri.path + " HTTP/1.0\r\nHost: " + current_uri.host + "\r\n\r\n";
-
-    std::cout << command.c_str();
+    std::string command = "GET " + current_uri->path + " HTTP/1.0\r\nHost: " + current_uri->host + "\r\n\r\n";
 
     int send_result = send(sock, command.c_str(), command.length(), 0);
     if(send_result != -1)
@@ -110,8 +106,6 @@ int main()
         {
             full_response.append(buffer, bytes_received);
         }
-
-        std::cout << full_response << std::endl;
 
         size_t deliminator = full_response.find("\r\n");
         std::string status_line;
@@ -129,7 +123,6 @@ int main()
             version = status_line.substr(0, deliminator);
             status_line.erase(0, version.length() + 1);     
         }
-        std::cout << "Version: " << version << std::endl;
 
         deliminator = status_line.find(" ");
         std::string status;
@@ -141,9 +134,6 @@ int main()
             status_line.erase(0, status.length() + 1);
             explaination = status_line;
         }
-        std::cout << "Status: " << status << std::endl;
-
-        std::cout << "Explaination: " << explaination << std::endl;
 
         std::string header_line;
 
@@ -163,28 +153,55 @@ int main()
                 value = header_line.erase(0, header.length() + 2);
                 std::transform(value.begin(), value.end(), value.begin(), ::tolower);
 
-                current_uri.headers.insert({header, value});
+                current_uri->headers.insert({header, value});
             }
 
             full_response.erase(0, deliminator + 2);
         }
 
-        for(const auto& element : current_uri.headers)
-        {
-            std::cout << element.first << " -> " << element.second << std::endl;
-        }
+        assert(!current_uri->headers.count("transfer-encoding"));
+        assert(!current_uri->headers.count("content-encoding"));
 
-        assert(!current_uri.headers.count("transfer-encoding"));
-        assert(!current_uri.headers.count("content-encoding"));
-
-        current_uri.body_content = full_response.erase(0, deliminator + 1);
-
-        std::cout << "CONTENT:\n" << current_uri.body_content << std::endl;
+        current_uri->body_content = full_response.erase(0, deliminator + 1);
         
     }
 
     close(sock);
     freeaddrinfo(result);
+
+    return 0;
+}
+
+void show(std::string body)
+{
+    bool in_tag = false;
+
+    for(auto &character : body)
+    {
+        if(character == '<')
+        {
+            in_tag = true;
+        }
+        else if(character == '>')
+        {
+            in_tag = false;
+        } else if(!in_tag)
+        {
+            std::cout << character;
+        }
+    }
+
+    return;
+}
+
+int main(int argc, char** argv)
+{
+    std::string user_uri = argv[1];
+    std::cout << user_uri << std::endl;
+    uri current_uri = parse_url(user_uri);
+
+    request(&current_uri);
+    show(current_uri.body_content);
 
     return 0;
 }
