@@ -50,7 +50,7 @@ url_parts parse_url(std::string url)
 
 int main()
 {
-    url_parts parts = parse_url("https://www.thatjessebloke.co.uk");
+    url_parts parts = parse_url("http://nossl.thatjessebloke.co.uk");
 
     addrinfo hints = {0};
     addrinfo *result = {0};
@@ -89,20 +89,25 @@ int main()
     std::cout << "Successfully connected to " << parts.host << " on port " << parts.port << std::endl;
 
     char buffer[4096] = {0};
+    std::string full_response;
+
     std::string command = "GET " + parts.path + " HTTP/1.0\r\nHost: " + parts.host + "\r\n\r\n";
 
     std::cout << command.c_str();
 
-    int send_result = send(sock, command.c_str(), sizeof(command.c_str()), 0);
+    int send_result = send(sock, command.c_str(), command.length(), 0);
     if(send_result != -1)
     {
-        int bytes_recieved = recv(sock, buffer, 4096, 0);
+        int bytes_received = 0;
 
-        // echo response to the console
-        if(bytes_recieved > 0)
+        while((bytes_received = recv(sock, buffer, 4096, 0)) > 0)
         {
-            std::cout << std::string(buffer, 0, bytes_recieved) << std::endl;
+            full_response.append(buffer, bytes_received);
         }
+
+        std::cout << full_response << std::endl;
+
+        
     }
 
     close(sock);
