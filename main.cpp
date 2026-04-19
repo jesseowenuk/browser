@@ -105,9 +105,16 @@ int main()
             full_response.append(buffer, bytes_received);
         }
 
-        std::cout << full_response << std::endl;
+        size_t deliminator = full_response.find("\r\n");
+        std::string status_line;
 
-        
+        if(deliminator != std::string::npos)
+        {
+            status_line = full_response.substr(0, deliminator);
+            full_response.erase(0, status_line.length());   // remove the scheme
+        }
+
+        std::cout << "Status Line: " << status_line << std::endl;
     }
 
     close(sock);
