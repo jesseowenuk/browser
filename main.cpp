@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <map>
+#include <algorithm>
 
 struct uri
 {
@@ -156,7 +157,11 @@ int main()
             if(header_deliminator != std::string::npos)
             {
                 header = header_line.substr(0, header_deliminator);
+                std::transform(header.begin(), header.end(), header.begin(), ::tolower);
+
                 value = header_line.erase(0, header.length() + 2);
+                std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+
                 current_uri.headers.insert({header, value});
             }
 
