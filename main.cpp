@@ -2,55 +2,59 @@
 #include <sys/socket.h>
 #include <iostream>
 #include <unistd.h>
+#include <assert.h>
+#include <map>
 
-struct url_parts
+struct uri
 {
+    std::string uri;
     std::string scheme;
     std::string host;
     std::string port;
     std::string path;
+    std::map<std::string, std::string> headers = {};
 };
 
-url_parts parse_url(std::string url)
+uri parse_url(std::string url)
 {
-    url_parts parts;
+    uri current_uri;
     size_t scheme_end = url.find("://");
 
     if(scheme_end != std::string::npos)
     {
-        parts.scheme = url.substr(0, scheme_end);
+        current_uri.scheme = url.substr(0, scheme_end);
         url.erase(0, scheme_end + 3);   // remove the scheme
     }
 
     size_t path_start = url.find("/");
     if(path_start != std::string::npos)
     {
-        parts.path = url.substr(path_start);
+        current_uri.path = url.substr(path_start);
         url.erase(path_start);  // now 'url' is just host[:port]
     }
     else
     {
-        parts.path = "/";
+        current_uri.path = "/";
     }
 
     size_t port_start = url.find(":");
     if(port_start != std::string::npos)
     {
-        parts.host = url.substr(0, port_start);
-        parts.port = url.substr(port_start + 1);
+        current_uri.host = url.substr(0, port_start);
+        current_uri.port = url.substr(port_start + 1);
     }
     else
     {
-        parts.host = url;
-        parts.port = (parts.scheme == "https") ? "443" : "80";
+        current_uri.host = url;
+        current_uri.port = (current_uri.scheme == "https") ? "443" : "80";
     }
 
-    return parts;
+    return current_uri;
 }
 
 int main()
 {
-    url_parts parts = parse_url("http://nossl.thatjessebloke.co.uk");
+    uri current_uri = parse_url("http://nossl.thatjessebloke.co.uk");
 
     addrinfo hints = {0};
     addrinfo *result = {0};
@@ -60,7 +64,7 @@ int main()
 
     // use .c_str() to convert std::string to a style string which getaddrinfo needs
     // this then uses getaddrinfo to do a DNS lookup
-    int status = getaddrinfo(parts.host.c_str(), parts.port.c_str(), &hints, &result);
+    int status = getaddrinfo(current_uri.host.c_str(), current_uri.port.c_str(), &hints, &result);
 
     if(status != 0)
     {
@@ -86,12 +90,12 @@ int main()
         return 1;
     }
 
-    std::cout << "Successfully connected to " << parts.host << " on port " << parts.port << std::endl;
+    std::cout << "Successfully connected to " << current_uri.host << " on port " << current_uri.port << std::endl;
 
     char buffer[4096] = {0};
     std::string full_response;
 
-    std::string command = "GET " + parts.path + " HTTP/1.0\r\nHost: " + parts.host + "\r\n\r\n";
+    std::string command = "GET " + current_uri.path + " HTTP/1.0\r\nHost: " + current_uri.host + "\r\n\r\n";
 
     std::cout << command.c_str();
 
@@ -105,16 +109,64 @@ int main()
             full_response.append(buffer, bytes_received);
         }
 
+        std::cout << full_response << std::endl;
+
         size_t deliminator = full_response.find("\r\n");
         std::string status_line;
 
         if(deliminator != std::string::npos)
         {
             status_line = full_response.substr(0, deliminator);
-            full_response.erase(0, status_line.length());   // remove the scheme
+            full_response.erase(0, status_line.length());   
         }
 
-        std::cout << "Status Line: " << status_line << std::endl;
+        deliminator = status_line.find(" ");
+        std::string version;
+        if(deliminator != std::string::npos)
+        {
+            version = status_line.substr(0, deliminator);
+            status_line.erase(0, version.length() + 1);     
+        }
+        std::cout << "Version: " << version << std::endl;
+
+        deliminator = status_line.find(" ");
+        std::string status;
+        std::string explaination;
+
+        if(deliminator != std::string::npos)
+        {
+            status = status_line.substr(0, deliminator);
+            status_line.erase(0, status.length() + 1);
+            explaination = status_line;
+        }
+        std::cout << "Status: " << status << std::endl;
+
+        std::cout << "Explaination: " << explaination << std::endl;
+
+        std::string header_line;
+
+        while((deliminator = full_response.find("\r\n")) != std::string::npos)
+        {
+            header_line = full_response.substr(0, deliminator);
+
+            size_t header_deliminator = header_line.find(":");
+            std::string header;
+            std::string value;
+
+            if(header_deliminator != std::string::npos)
+            {
+                header = header_line.substr(0, header_deliminator);
+                value = header_line.erase(0, header.length() + 2);
+                current_uri.headers.insert({header, value});
+            }
+
+            full_response.erase(0, deliminator + 2);
+        }
+
+        for(const auto& element : current_uri.headers)
+        {
+            std::cout << element.first << " -> " << element.second << std::endl;
+        }
     }
 
     close(sock);
